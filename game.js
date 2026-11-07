@@ -359,10 +359,11 @@ function showFeedback(q) {
   guessLine.textContent = wrongGuesses.length ? `Your guesses: ${wrongGuesses.join(', ')}` : '';
   guessLine.hidden = wrongGuesses.length === 0;
 
-  // Show all of this song's pictures so the player can compare the levels.
+  // After a miss, show all of this song's pictures so the player can see the other clues.
+  // After a right guess, keep it clean and show none.
   const clues = $('feedback-clues');
   clues.innerHTML = '';
-  const levels = state.available.get(q.song.id);
+  const levels = q.result.right ? new Set() : state.available.get(q.song.id);
   for (const level of LEVELS) {
     if (!levels.has(level)) continue;
     const item = document.createElement('div');
