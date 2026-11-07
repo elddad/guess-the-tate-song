@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>All Pictures</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .gallery-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 8px 0 16px; }
+    .gallery-head h1 { margin: 0; font-size: 1.5rem; }
+    .gallery-head p { margin: 0; color: var(--muted); }
+    .song { margin-bottom: 18px; padding: 14px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+    .song h2 { margin: 0 0 10px; font-size: 1.05rem; }
+    .song h2 small { color: var(--muted); font-weight: 400; }
+    .row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .pic { margin: 0; }
+    .pic img, .pic .missing { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); display: block; background: var(--card-2); }
+    .pic .missing { display: grid; place-items: center; color: var(--muted); font-size: 0.85rem; }
+    .pic figcaption { margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
+    .pic figcaption b { color: var(--text); }
+    main { max-width: 1000px; }
+  </style>
+</head>
+<body>
+  <header class="topbar" style="max-width: 1000px">
+    <a class="brand" href="./" style="text-decoration:none"><span class="brand-mark" aria-hidden="true">♪</span><span>Guess the <em>Tate</em> Song</span></a>
+  </header>
+  <main>
+    <div class="gallery-head">
+      <h1>All pictures</h1>
+      <p id="count"></p>
+    </div>
+    <div id="list"></div>
+  </main>
+  <script src="data/bundle.js"></script>
+  <script>
+    (async () => {
+      const LEVELS = ['easy', 'medium', 'hard'];
+      const B = window.GAME_DATA;
+      const ext = B?.imageExt || 'png';
+      let songs, ready = null;
+      if (B) { songs = B.songs; ready = new Set(B.images); }
+      else {
+        songs = (await (await fetch('data/songs.json', { cache: 'no-store' })).json()).songs;
+        try { const r = await fetch('data/images.json', { cache: 'no-store' }); if (r.ok) ready = new Set(await r.json()); } catch {}
+      }
+      const list = document.getElementById('list');
+      let have = 0;
+      for (const song of songs) {
+        const box = document.createElement('section');
+        box.className = 'song';
+        const h = document.createElement('h2');
+        h.innerHTML = `${song.title}${song.with ? ` (with ${song.with})` : ''} <small>· ${song.year} · ${song.album}</small>`;
+        const row = document.createElement('div');
+        row.className = 'row';
+        for (const level of LEVELS) {
+          const path = `images/${song.id}-${level}.${ext}`;
+          const fig = document.createElement('figure');
+          fig.className = 'pic';
+          if (!ready || ready.has(path)) {
+            const img = document.createElement('img');
+            img.src = path; img.loading = 'lazy'; img.alt = `${song.title} ${level}`;
+            fig.appendChild(img);
+            have++;
+          } else {
+            const m = document.createElement('div');
+            m.className = 'missing'; m.textContent = 'Not made yet';
+            fig.appendChild(m);
+          }
+          const cap = document.createElement('figcaption');
+          cap.innerHTML = `<b>${level[0].toUpperCase() + level.slice(1)}</b> · ${song.levels[level].idea}`;
+          fig.appendChild(cap);
+          row.appendChild(fig);
+        }
+        box.append(h, row);
+        list.appendChild(box);
+      }
+      document.getElementById('count').textContent = `${have} of ${songs.length * 3} pictures`;
+    })();
+  </script>
+</body>
+</html>
