@@ -449,27 +449,6 @@ function showFeedback(q) {
   guessLine.textContent = wrongGuesses.length ? `Your guesses: ${wrongGuesses.join(', ')}` : '';
   guessLine.hidden = wrongGuesses.length === 0;
 
-  // After a miss, show all of this song's pictures so the player can see the other clues.
-  // After a right guess, keep it clean and show none.
-  const clues = $('feedback-clues');
-  clues.innerHTML = '';
-  const levels = q.result.right ? new Set() : state.available.get(q.song.id);
-  for (const level of LEVELS) {
-    if (!levels.has(level)) continue;
-    const item = document.createElement('div');
-    item.className = `mini-clue${level === q.shown ? ' current' : ''}`;
-    const img = document.createElement('img');
-    img.src = imagePath(q.song, level);
-    img.alt = `${levelName(level)} picture for ${q.song.title}`;
-    img.title = q.song.levels[level].idea;
-    img.loading = 'lazy';
-    const label = document.createElement('span');
-    label.textContent = levelName(level);
-    item.append(img, label);
-    clues.appendChild(item);
-  }
-  if (clues.children.length < 2) clues.innerHTML = '';
-
   const last = state.index === state.round.length - 1;
   $('next-btn').textContent = last ? 'See results' : 'Next song';
   $('feedback').hidden = false;
