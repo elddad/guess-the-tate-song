@@ -23,7 +23,7 @@
 </head>
 <body>
   <header class="topbar" style="max-width: 1000px">
-    <a class="brand" href="./" style="text-decoration:none"><span class="brand-mark" aria-hidden="true">♪</span><span>Guess the <em>Tate</em> Song</span></a>
+    <a class="brand" href="./" style="text-decoration:none"><span class="brand-mark" aria-hidden="true">♪</span><span>Guess the <em>Song</em></span></a>
   </header>
   <main>
     <div class="gallery-head">
@@ -38,22 +38,26 @@
       const LEVELS = ['easy', 'medium', 'hard'];
       const B = window.GAME_DATA;
       const ext = B?.imageExt || 'png';
-      let songs, ready = null;
-      if (B) { songs = B.songs; ready = new Set(B.images); }
+      let songs, artists, ready = null;
+      if (B) { songs = B.songs; artists = B.artists || []; ready = new Set(B.images); }
       else {
-        songs = (await (await fetch('data/songs.json', { cache: 'no-store' })).json()).songs;
+        const data = await (await fetch('data/songs.json', { cache: 'no-store' })).json();
+        songs = data.songs; artists = data.artists || [];
         try { const r = await fetch('data/images.json', { cache: 'no-store' }); if (r.ok) ready = new Set(await r.json()); } catch {}
       }
       const list = document.getElementById('list');
-      let have = 0;
+      let have = 0, all = 0;
+      const artistName = (id) => artists.find((a) => a.id === id)?.name || '';
       for (const song of songs) {
         const box = document.createElement('section');
         box.className = 'song';
         const h = document.createElement('h2');
-        h.innerHTML = `${song.title}${song.with ? ` (with ${song.with})` : ''} <small>· ${song.year} · ${song.album}</small>`;
+        h.innerHTML = `${song.title}${song.with ? ` (with ${song.with})` : ''} <small>· ${artistName(song.artist)} · ${song.year} · ${song.album}</small>`;
+        if (song.lang === 'he') h.dir = 'auto';
         const row = document.createElement('div');
         row.className = 'row';
-        for (const level of LEVELS) {
+        for (const level of LEVELS.filter((l) => song.levels[l])) {
+          all++;
           const path = `images/${song.id}-${level}.${ext}`;
           const fig = document.createElement('figure');
           fig.className = 'pic';
@@ -75,7 +79,7 @@
         box.append(h, row);
         list.appendChild(box);
       }
-      document.getElementById('count').textContent = `${have} of ${songs.length * 3} pictures`;
+      document.getElementById('count').textContent = `${have} of ${all} pictures`;
     })();
   </script>
 </body>

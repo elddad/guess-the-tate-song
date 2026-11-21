@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Guess the Tate Song</title>
-  <meta name="description" content="Guess the Tate McRae song from a picture clue.">
+  <title>Guess the Song</title>
+  <meta name="description" content="Guess the song from a picture clue: Tate McRae, Justin Bieber, Selena Gomez, Freya Skye, Noa Kirel and Mika Moshe.">
   <meta name="theme-color" content="#120d17">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
   <link rel="stylesheet" href="style.css">
-  <meta property="og:title" content="Guess the Tate Song">
-  <meta property="og:description" content="Can you name the Tate McRae song from one picture? Easy, medium and hard levels.">
+  <meta property="og:title" content="Guess the Song">
+  <meta property="og:description" content="Can you name the song from one picture? Tate McRae, Justin Bieber, Selena Gomez, Freya Skye, Noa Kirel and Mika Moshe.">
   <meta property="og:image" content="https://elddad.github.io/guess-the-tate-song/images/sports-car-easy.jpg">
   <meta property="og:url" content="https://elddad.github.io/guess-the-tate-song/">
   <meta name="twitter:card" content="summary_large_image">
@@ -18,7 +18,7 @@
   <header class="topbar">
     <button class="brand" id="home-btn" type="button" aria-label="Back to start">
       <span class="brand-mark" aria-hidden="true">♪</span>
-      <span>Guess the <em>Tate</em> Song</span>
+      <span>Guess the <em>Song</em></span>
     </button>
     <div class="hud" id="hud" hidden>
       <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="hud-score">0</span></div>
@@ -30,9 +30,14 @@
     <!-- Start -->
     <section id="screen-start" class="screen">
       <div class="intro">
-        <h1>Which Tate McRae song is this?</h1>
-        <p>Every picture is a clue to a song: the title, the story, or a small detail from it. Pick a level, then type the name of 10 songs.</p>
+        <h1>Which song is this?</h1>
+        <p>Every picture is a clue to a song: the title, the story, or a small detail from it. Pick an artist and a level, then type the name of 10 songs. Hebrew songs are answered in Hebrew, English songs in English.</p>
       </div>
+      <div class="artists" id="artists" role="group" aria-label="Artist"></div>
+      <label class="setting">
+        <input type="checkbox" id="show-artist">
+        <span>Show the artist while guessing</span>
+      </label>
       <div class="levels" id="levels"></div>
       <p class="status" id="start-status"></p>
     </section>
@@ -52,6 +57,7 @@
         <figcaption class="info-hint" id="info-hint" hidden></figcaption>
       </figure>
 
+      <p class="answer-lang" id="answer-lang"></p>
       <form class="guess" id="guess-form" autocomplete="off">
         <input id="guess-input" class="guess-input" type="text" placeholder="Type the song name…"
                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
@@ -91,7 +97,7 @@
   </main>
 
   <footer class="site-footer">
-    Unofficial fan game, not affiliated with Tate McRae. Pictures made with ChatGPT.
+    Unofficial fan game, not affiliated with any of the artists. Pictures made with ChatGPT.
     <a href="gallery.html">See all pictures (spoilers!)</a>
   </footer>
 

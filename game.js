@@ -1,5 +1,6 @@
-// Guess the Tate Song — game logic.
+// Guess the Song — game logic.
 // Pictures live in images/<song id>-<level>.png. Songs whose picture is missing are skipped.
+// Some songs only have some levels (the newer artists only have an Easy picture).
 
 const LEVELS = ['easy', 'medium', 'hard'];
 const MODES = [
@@ -18,6 +19,8 @@ const screens = { start: $('screen-start'), play: $('screen-play'), end: $('scre
 
 const state = {
   songs: [],
+  artists: [],
+  artist: 'all', // artist id, or 'all'
   available: new Map(), // song id -> Set of levels that have a picture
   mode: 'easy',
   round: [],
@@ -36,6 +39,10 @@ const BUNDLE = window.GAME_DATA || null;
 const IMAGE_EXT = BUNDLE?.imageExt || 'png';
 const imagePath = (song, level) => `images/${song.id}-${level}.${IMAGE_EXT}`;
 const levelName = (level) => level[0].toUpperCase() + level.slice(1);
+const songLevels = (song) => LEVELS.filter((level) => song.levels[level]);
+const isHebrew = (song) => song.lang === 'he';
+const artistOf = (song) => state.artists.find((a) => a.id === song.artist);
+const artistName = (song) => artistOf(song)?.name || '';
 
 function shuffle(list) {
   const a = [...list];
@@ -49,7 +56,8 @@ function shuffle(list) {
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 function displayTitle(song) {
-  return song.with ? `${song.title} (with ${song.with})` : song.title;
+  if (!song.with) return song.title;
+  return isHebrew(song) ? `${song.title} (עם ${song.with})` : `${song.title} (with ${song.with})`;
 }
 
 async function imageExists(url) {
@@ -61,12 +69,32 @@ async function imageExists(url) {
   }
 }
 
+// Tate McRae keeps the old key, so best scores from before other artists were added still count.
+const bestKey = (mode) => (state.artist === 'tate-mcrae' ? `tate-best-${mode}` : `best-${state.artist}-${mode}`);
+
 function readBest(mode) {
-  try { return Number(localStorage.getItem(`tate-best-${mode}`)) || 0; } catch { return 0; }
+  try { return Number(localStorage.getItem(bestKey(mode))) || 0; } catch { return 0; }
 }
 
 function writeBest(mode, score) {
-  try { localStorage.setItem(`tate-best-${mode}`, String(score)); } catch { /* storage blocked: ignore */ }
+  try { localStorage.setItem(bestKey(mode), String(score)); } catch { /* storage blocked: ignore */ }
+}
+
+function readArtist() {
+  try { return localStorage.getItem('guess-artist') || 'all'; } catch { return 'all'; }
+}
+
+function writeArtist(id) {
+  try { localStorage.setItem('guess-artist', id); } catch { /* storage blocked: ignore */ }
+}
+
+// Setting: show the artist's name on every question (off by default).
+function readShowArtist() {
+  try { return localStorage.getItem('show-artist') === '1'; } catch { return false; }
+}
+
+function writeShowArtist(on) {
+  try { localStorage.setItem('show-artist', on ? '1' : '0'); } catch { /* storage blocked: ignore */ }
 }
 
 function show(name) {
@@ -75,8 +103,9 @@ function show(name) {
   window.scrollTo({ top: 0 });
 }
 
-function playableSongs(mode) {
+function playableSongs(mode, artist = state.artist) {
   return state.songs.filter((song) => {
+    if (artist !== 'all' && song.artist !== artist) return false;
     const levels = state.available.get(song.id);
     if (!levels || levels.size === 0) return false;
     return mode === 'mixed' || levels.has(mode);
@@ -86,12 +115,23 @@ function playableSongs(mode) {
 /* ---------- answer checking ---------- */
 
 // "It's OK, I'm OK!" -> "itsokimok". Case, spaces, punctuation and accents don't matter.
+// Hebrew: niqqud doesn't matter, and final letters count as the normal letter (ם = מ).
+const HEBREW_FINALS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
 function normalize(text) {
   return text
     .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f\u0591-\u05c7]/g, '')
+    .replace(/[ךםןףץ]/g, (c) => HEBREW_FINALS[c])
     .replace(/&/g, 'and')
-    .replace(/[^a-z0-9]/g, '');
+    .replace(/[^a-z0-9\u05d0-\u05ea]/g, '');
+}
+
+const hasHebrew = (text) => /[\u05d0-\u05ea]/.test(text);
+const hasLatin = (text) => /[a-z]/i.test(text);
+
+// Hebrew songs must be typed in Hebrew, English songs in English.
+function wrongLanguage(guess, song) {
+  return isHebrew(song) ? !hasHebrew(guess) && hasLatin(guess) : hasHebrew(guess);
 }
 
 // Number of single-letter edits (add, remove, change) to turn a into b.
@@ -110,10 +150,18 @@ function editDistance(a, b) {
 // How many typos to forgive: none for very short titles, more for long ones.
 const allowedTypos = (length) => (length <= 3 ? 0 : length <= 6 ? 1 : length <= 12 ? 2 : 3);
 
-// Returns 'right', 'close' (a few letters off) or 'wrong'.
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Returns 'right', 'close' (a few letters off), 'wrong', or 'language' (typed in the wrong language).
 function checkGuess(guess, song) {
-  let g = normalize(guess).replace(/(by)?tatemcrae/g, '');
-  if (song.with) g = g.replace(new RegExp(`(with|feat|ft|featuring|and)?${normalize(song.with)}`, 'g'), '');
+  if (wrongLanguage(guess, song)) return 'language';
+  let g = normalize(guess);
+  // Ignore the artist's name if the player adds it ("Greedy by Tate McRae").
+  const artist = artistOf(song);
+  for (const name of [artist?.name, ...(artist?.aliases || [])].filter(Boolean).map(normalize)) {
+    if (name) g = g.replace(new RegExp(`(by|של|מאת)?${escapeRegExp(name)}`, 'g'), '');
+  }
+  if (song.with) g = g.replace(new RegExp(`(with|feat|ft|featuring|and|עמ|ו)?${escapeRegExp(normalize(song.with))}`, 'g'), '');
   if (!g) return 'wrong';
   const digits = (s) => s.replace(/\D/g, '');
   let best = 'wrong';
@@ -129,7 +177,28 @@ function checkGuess(guess, song) {
 
 /* ---------- start screen ---------- */
 
+function renderArtists() {
+  const box = $('artists');
+  box.innerHTML = '';
+  const options = [{ id: 'all', name: 'All artists' }, ...state.artists];
+  for (const artist of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'artist-chip';
+    btn.textContent = artist.name;
+    btn.setAttribute('aria-pressed', String(state.artist === artist.id));
+    btn.addEventListener('click', () => {
+      state.artist = artist.id;
+      writeArtist(artist.id);
+      renderStart();
+    });
+    box.appendChild(btn);
+  }
+}
+
 function renderStart() {
+  renderArtists();
+  $('show-artist').checked = readShowArtist();
   const box = $('levels');
   box.innerHTML = '';
   for (const mode of MODES) {
@@ -143,18 +212,21 @@ function renderStart() {
     btn.innerHTML = `
       <span class="level-name">${mode.name}</span>
       <span class="level-desc">${mode.desc}</span>
-      <span class="level-meta"><strong>${count}</strong> songs${best ? ` · best <strong>${best}</strong>` : ''}</span>`;
+      <span class="level-meta">${count === 0 && (mode.id === 'medium' || mode.id === 'hard')
+        ? 'Only Tate McRae songs have this level'
+        : `<strong>${count}</strong> songs${best ? ` · best <strong>${best}</strong>` : ''}`}</span>`;
     btn.addEventListener('click', () => startRound(mode.id));
     box.appendChild(btn);
   }
 
-  const totalPictures = [...state.available.values()].reduce((n, set) => n + set.size, 0);
-  const allPictures = state.songs.length * LEVELS.length;
+  const songs = state.songs.filter((s) => state.artist === 'all' || s.artist === state.artist);
+  const totalPictures = songs.reduce((n, s) => n + (state.available.get(s.id)?.size || 0), 0);
+  const allPictures = songs.reduce((n, s) => n + songLevels(s).length, 0);
   $('start-status').textContent = totalPictures === 0
-    ? 'No pictures yet. Add them to the images folder, run "npm run check", then reload.'
+    ? 'No pictures yet for this artist. Add them to the images folder, run "npm run check", then reload.'
     : totalPictures < allPictures
       ? `${totalPictures} of ${allPictures} pictures ready. Songs without a picture are skipped.`
-      : `${state.songs.length} songs, ${allPictures} pictures.`;
+      : `${songs.length} songs, ${allPictures} pictures.`;
   show('start');
 }
 
@@ -249,7 +321,16 @@ function showQuestion() {
   setPicture(q);
   updateHintButton(q);
 
+  // Hebrew songs are answered in Hebrew, English songs in English.
+  const hebrew = isHebrew(q.song);
+  const lang = hebrew ? 'Answer in <strong>Hebrew</strong> · כתבו בעברית' : 'Answer in <strong>English</strong>';
+  $('answer-lang').innerHTML = readShowArtist() && artistName(q.song)
+    ? `Artist: <strong>${artistName(q.song)}</strong> · ${lang}`
+    : lang;
   const input = $('guess-input');
+  input.placeholder = hebrew ? 'כתבו את שם השיר בעברית…' : 'Type the song name in English…';
+  input.dir = hebrew ? 'rtl' : 'ltr';
+  input.lang = hebrew ? 'he' : 'en';
   input.value = '';
   input.disabled = false;
   input.className = 'guess-input';
@@ -274,7 +355,7 @@ function useHint() {
   } else if (!q.infoHint) {
     q.infoHint = true;
     const hint = $('info-hint');
-    hint.textContent = `Released ${q.song.year} · ${q.song.album}`;
+    hint.textContent = `${artistName(q.song)} · released ${q.song.year} · ${q.song.album}`;
     hint.hidden = false;
   }
   updateHintButton(q);
@@ -296,6 +377,14 @@ function submitGuess(event) {
   }
 
   const verdict = checkGuess(guess, q.song);
+  if (verdict === 'language') {
+    // Doesn't use up a try.
+    setMessage(isHebrew(q.song)
+      ? 'This is a Hebrew song: write the name in Hebrew · זה שיר בעברית, כתבו בעברית'
+      : 'This is an English song: write the name in English', 'close');
+    input.select();
+    return;
+  }
   q.guesses.push(guess);
   if (verdict === 'right') {
     finish(true);
@@ -348,9 +437,10 @@ function finish(isRight) {
 
 function showFeedback(q) {
   const title = $('feedback-title');
+  const by = artistName(q.song) ? ` by ${artistName(q.song)}` : '';
   title.textContent = q.result.right
-    ? `Yes! “${displayTitle(q.song)}” +${q.result.points}`
-    : `It was “${displayTitle(q.song)}”`;
+    ? `Yes! “${displayTitle(q.song)}”${by} +${q.result.points}`
+    : `It was “${displayTitle(q.song)}”${by}`;
   title.className = `feedback-title ${q.result.right ? 'good' : 'bad'}`;
   $('feedback-idea').textContent = q.song.levels[q.shown].idea;
 
@@ -412,12 +502,13 @@ function endRound() {
   const isBest = state.score > prevBest;
   if (isBest) writeBest(state.mode, state.score);
 
-  $('end-level').textContent = `${levelName(state.mode)} level`;
+  const artist = state.artists.find((a) => a.id === state.artist);
+  $('end-level').textContent = `${artist ? `${artist.name} · ` : ''}${levelName(state.mode)} level`;
   $('end-score').textContent = state.score;
   $('end-max').textContent = max;
   const total = state.round.length;
   const ratio = state.correct / total;
-  const cheer = ratio === 1 ? 'Perfect — true fan!' : ratio >= 0.7 ? 'Great ear!' : ratio >= 0.4 ? 'Not bad!' : 'Time for a Tate playlist.';
+  const cheer = ratio === 1 ? 'Perfect — true fan!' : ratio >= 0.7 ? 'Great ear!' : ratio >= 0.4 ? 'Not bad!' : `Time for a ${artist ? artist.name : 'new'} playlist.`;
   $('end-line').textContent = `${state.correct} of ${total} right · best streak ${state.bestStreak}. ${cheer}`;
   $('end-best').textContent = isBest ? 'New best score!' : `Best: ${prevBest}`;
 
@@ -452,6 +543,7 @@ function endRound() {
 
 $('guess-form').addEventListener('submit', submitGuess);
 $('hint-btn').addEventListener('click', useHint);
+$('show-artist').addEventListener('change', (e) => writeShowArtist(e.target.checked));
 $('giveup-btn').addEventListener('click', () => finish(false));
 $('next-btn').addEventListener('click', next);
 $('again-btn').addEventListener('click', () => startRound(state.mode));
@@ -472,12 +564,14 @@ async function boot() {
   let ready = null;
   if (BUNDLE) {
     state.songs = BUNDLE.songs;
+    state.artists = BUNDLE.artists || [];
     ready = new Set(BUNDLE.images);
   } else {
     try {
       const res = await fetch('data/songs.json', { cache: 'no-store' });
       const data = await res.json();
       state.songs = data.songs;
+      state.artists = data.artists || [];
     } catch {
       $('start-status').textContent = 'Could not load the song list. Start the game with "npm start" and open the link it prints.';
       return;
@@ -492,7 +586,10 @@ async function boot() {
     } catch { /* fall back to checking each picture */ }
   }
 
-  await Promise.all(state.songs.flatMap((song) => LEVELS.map(async (level) => {
+  const saved = readArtist();
+  state.artist = saved === 'all' || state.artists.some((a) => a.id === saved) ? saved : 'all';
+
+  await Promise.all(state.songs.flatMap((song) => songLevels(song).map(async (level) => {
     const path = imagePath(song, level);
     const ok = ready ? ready.has(path) : await imageExists(path);
     if (ok) {

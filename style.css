@@ -95,6 +95,42 @@ main {
 .intro h1 { font-size: clamp(1.7rem, 5vw, 2.5rem); line-height: 1.15; margin: 0 0 10px; }
 .intro p { color: var(--muted); margin: 0 auto; max-width: 52ch; }
 
+.artists {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+.artist-chip {
+  padding: 7px 14px;
+  border-radius: 99px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.artist-chip:hover, .artist-chip:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
+.artist-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+
+.setting {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  margin: -6px auto 18px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.setting input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.setting:hover { color: var(--text); }
+
+.answer-lang { margin: -4px 0 8px; font-size: 0.85rem; color: var(--muted); }
+.answer-lang strong { color: var(--text); }
+
 .levels {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
